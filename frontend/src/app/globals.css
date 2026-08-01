@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-fraunces: "Fraunces", serif;
+  --font-inter: "Inter", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+
+@layer base {
+  * {
+    @apply border-canopy-100 dark:border-canopy-700;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-paper text-canopy-800 font-body antialiased transition-colors duration-200 dark:bg-canopy-900 dark:text-canopy-100;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme("colors.moss.DEFAULT");
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .container-app {
+    @apply mx-auto w-full max-w-7xl px-6 lg:px-8;
+  }
+
+  .eyebrow {
+    @apply font-mono text-xs uppercase tracking-[0.2em] text-moss-dark dark:text-moss-light;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-canopy-700 px-6 py-3 text-sm font-semibold text-paper transition-colors hover:bg-canopy-600 focus-visible:outline-moss dark:bg-moss dark:text-canopy-900 dark:hover:bg-moss-light;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-canopy-200 bg-transparent px-6 py-3 text-sm font-semibold text-canopy-700 transition-colors hover:border-canopy-700 dark:border-canopy-600 dark:text-canopy-100 dark:hover:border-canopy-300;
+  }
+
+  .card {
+    @apply rounded-2xl border border-canopy-100 bg-paper shadow-[0_1px_2px_rgba(15,42,29,0.04)] transition-colors dark:border-canopy-700 dark:bg-canopy-800 dark:shadow-none;
+  }
+}

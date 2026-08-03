@@ -15,12 +15,12 @@ export const protect = catchAsync(async (req: Request, res: Response, next: Next
 
   const payload = verifyAccessToken(token);
 
-  const user = await User.findById(payload.sub).select("_id role isActive");
+  const user = await User.findById(payload.sub).select("_id name role isActive");
   if (!user || !user.isActive) {
     throw ApiError.unauthorized("Your session is no longer valid");
   }
 
-  req.user = { id: user.id, role: user.role };
+  req.user = { id: user.id, name: user.name, role: user.role };
   next();
 });
 

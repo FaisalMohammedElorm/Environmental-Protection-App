@@ -6,11 +6,13 @@ export const listUsersQuerySchema = z.object({
   page: z
     .string()
     .optional()
-    .transform((v) => (v ? Number(v) : 1)),
+    .transform((v) => (v ? Number(v) : 1))
+    .pipe(z.number().int().min(1)),
   limit: z
     .string()
     .optional()
     .transform((v) => (v ? Number(v) : 25))
+    .pipe(z.number().int().min(1).max(100))
 });
 
 export const updateUserStatusSchema = z.object({
@@ -22,7 +24,7 @@ export const updateUserRoleSchema = z.object({
 });
 
 export const userIdParamSchema = z.object({
-  id: z.string().min(1)
+  id: z.string().regex(/^[a-f\d]{24}$/i, "id must be a valid user ID")
 });
 
 export const updateSettingsSchema = z.object({

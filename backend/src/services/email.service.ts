@@ -66,3 +66,17 @@ export async function sendReportStatusEmail(
     `
   });
 }
+
+export async function sendContactEmail(
+  name: string,
+  email: string,
+  subject: string,
+  message: string
+): Promise<void> {
+  await sendMail({
+    to: env.email.user || env.email.from,
+    subject: `[Contact] ${subject}`,
+    html: `<p><strong>From:</strong> ${name} (${email})</p><p>${message}</p>`
+  });
+}
+

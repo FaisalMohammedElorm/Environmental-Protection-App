@@ -11,6 +11,7 @@ interface ValidationTargets {
 export function validateRequest(schemas: ValidationTargets) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const errors: Record<string, string[]> = {};
+    const parsed: Partial<Record<"body" | "query" | "params", unknown>> = {};
 
     (["body", "query", "params"] as const).forEach((key) => {
       const schema = schemas[key];
@@ -23,7 +24,7 @@ export function validateRequest(schemas: ValidationTargets) {
           errors[field] = [...(errors[field] ?? []), issue.message];
         });
       } else {
-        req[key] = result.data;
+        parsed[key] = result.data;
       }
     });
 
@@ -32,6 +33,15 @@ export function validateRequest(schemas: ValidationTargets) {
       return;
     }
 
+    // Only mutate the request after ALL schemas pass — prevents partial writes
+    // where a failing body schema still left a mutated req.query behind.
+    (["body", "query", "params"] as const).forEach((key) => {
+      if (parsed[key] !== undefined) {
+        req[key] = parsed[key];
+      }
+    });
+
     next();
   };
 }
+

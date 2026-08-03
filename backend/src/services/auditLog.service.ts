@@ -1,6 +1,5 @@
 import { AuditLog } from "../models/AuditLog";
 import type { AuthenticatedUser } from "../types/express";
-import { User } from "../models/User";
 
 interface RecordAuditLogInput {
   actor: AuthenticatedUser;
@@ -11,10 +10,9 @@ interface RecordAuditLogInput {
 }
 
 export async function recordAuditLog(input: RecordAuditLogInput): Promise<void> {
-  const actorUser = await User.findById(input.actor.id).select("name");
   await AuditLog.create({
     actor: input.actor.id,
-    actorName: actorUser?.name ?? "Unknown",
+    actorName: input.actor.name,
     actorRole: input.actor.role,
     action: input.action,
     targetType: input.targetType,
@@ -22,3 +20,4 @@ export async function recordAuditLog(input: RecordAuditLogInput): Promise<void> 
     metadata: input.metadata
   });
 }
+

@@ -1,4 +1,5 @@
-import type { FilterQuery, Types } from "mongoose";
+import { Types } from "mongoose";
+import type { FilterQuery } from "mongoose";
 import { Report, type IReport } from "../models/Report";
 import { Comment } from "../models/Comment";
 import { User } from "../models/User";
@@ -33,15 +34,8 @@ interface ListReportsFilters {
   reportedBy?: string;
 }
 
-const SEVERITY_RANK: Record<string, number> = { low: 0, moderate: 1, high: 2, critical: 3 };
-const STATUS_RANK: Record<string, number> = {
-  new: 0,
-  under_review: 1,
-  assigned: 2,
-  in_progress: 3,
-  resolved: 4,
-  rejected: 5
-};
+
+
 
 const POPULATE_FIELDS = [
   { path: "reportedBy", select: "name" },
@@ -90,56 +84,115 @@ export async function createReport(reporterId: string, input: CreateReportInput)
 }
 
 export async function listReports(filters: ListReportsFilters): Promise<Paginated<PublicReport>> {
-  const query: FilterQuery<IReport> = {};
+  const matchStage: FilterQuery<IReport> = {};
 
-  if (filters.status) query.status = filters.status;
-  if (filters.category) query.category = filters.category;
-  if (filters.severity) query.severity = filters.severity;
-  if (filters.reportedBy) query.reportedBy = filters.reportedBy;
-  if (filters.search) {
-    query.$text = { $search: filters.search };
-  }
+  if (filters.status) matchStage.status = filters.status;
+  if (filters.category) matchStage.category = filters.category;
+  if (filters.severity) matchStage.severity = filters.severity;
+  if (filters.reportedBy) matchStage.reportedBy = new Types.ObjectId(filters.reportedBy);
+  if (filters.search) matchStage.$text = { $search: filters.search };
 
   const sortBy = filters.sortBy ?? "createdAt";
   const sortOrder = filters.sortOrder ?? "desc";
+  const sortDir = sortOrder === "asc" ? 1 : -1;
+  const skip = (filters.page - 1) * filters.limit;
 
   if (sortBy === "createdAt") {
-    // The common case stays fully DB-side: sort, skip, and limit all happen in Mongo.
-    const skip = (filters.page - 1) * filters.limit;
+    // Fully DB-side: sort → skip → limit → populate, no data loaded into memory.
     const [reports, total] = await Promise.all([
-      Report.find(query)
-        .sort({ createdAt: sortOrder === "asc" ? 1 : -1 })
+      Report.find(matchStage)
+        .sort({ createdAt: sortDir })
         .skip(skip)
         .limit(filters.limit)
         .populate(POPULATE_FIELDS),
-      Report.countDocuments(query)
+      Report.countDocuments(matchStage)
     ]);
 
-    const items = await Promise.all(reports.map((report) => withComments(report)));
+    const items = await Promise.all(reports.map((r) => withComments(r)));
     return paginate(items, total, filters.page, filters.limit);
   }
 
-  // severity/status have a meaningful order (low < moderate < high < critical; new < ... <
-  // resolved) that isn't alphabetical, so Mongo's plain .sort() can't express it without an
-  // aggregation. Filtering happens at the DB level first to keep the working set bounded,
-  // then rank + paginate happen in memory.
-  const rankMap = sortBy === "severity" ? SEVERITY_RANK : STATUS_RANK;
-  const direction = sortOrder === "asc" ? 1 : -1;
+  // severity and status have a meaningful ordinal rank that isn't alphabetical.
+  // We inject a numeric _rank field via $addFields so MongoDB can sort natively
+  // without pulling the entire result set into Node.js memory.
+  const rankExpression =
+    sortBy === "severity"
+      ? {
+          $switch: {
+            branches: [
+              { case: { $eq: ["$severity", "low"] }, then: 0 },
+              { case: { $eq: ["$severity", "moderate"] }, then: 1 },
+              { case: { $eq: ["$severity", "high"] }, then: 2 },
+              { case: { $eq: ["$severity", "critical"] }, then: 3 }
+            ],
+            default: 0
+          }
+        }
+      : {
+          $switch: {
+            branches: [
+              { case: { $eq: ["$status", "new"] }, then: 0 },
+              { case: { $eq: ["$status", "under_review"] }, then: 1 },
+              { case: { $eq: ["$status", "assigned"] }, then: 2 },
+              { case: { $eq: ["$status", "in_progress"] }, then: 3 },
+              { case: { $eq: ["$status", "resolved"] }, then: 4 },
+              { case: { $eq: ["$status", "rejected"] }, then: 5 }
+            ],
+            default: 0
+          }
+        };
 
-  const allMatching = await Report.find(query).populate(POPULATE_FIELDS);
-  const sorted = allMatching.sort((a, b) => {
-    const rankA = rankMap[sortBy === "severity" ? a.severity : a.status] ?? 0;
-    const rankB = rankMap[sortBy === "severity" ? b.severity : b.status] ?? 0;
-    return (rankA - rankB) * direction;
-  });
+  // Aggregation: match → addFields(rank) → sort → facet(data+count in one round-trip)
+  // $lookup replaces .populate() for reportedBy / assignedTo.
+  const [agg] = await Report.aggregate<{
+    data: IReport[];
+    total: { count: number }[];
+  }>([
+    { $match: matchStage },
+    { $addFields: { _rank: rankExpression } },
+    { $sort: { _rank: sortDir } },
+    {
+      $facet: {
+        data: [
+          { $skip: skip },
+          { $limit: filters.limit },
+          {
+            $lookup: {
+              from: "users",
+              localField: "reportedBy",
+              foreignField: "_id",
+              as: "reportedBy",
+              pipeline: [{ $project: { name: 1 } }]
+            }
+          },
+          { $unwind: { path: "$reportedBy", preserveNullAndEmptyArrays: false } },
+          {
+            $lookup: {
+              from: "users",
+              localField: "assignedTo",
+              foreignField: "_id",
+              as: "assignedTo",
+              pipeline: [{ $project: { name: 1 } }]
+            }
+          },
+          {
+            $unwind: {
+              path: "$assignedTo",
+              preserveNullAndEmptyArrays: true
+            }
+          }
+        ],
+        total: [{ $count: "count" }]
+      }
+    }
+  ]);
 
-  const total = sorted.length;
-  const start = (filters.page - 1) * filters.limit;
-  const pageSlice = sorted.slice(start, start + filters.limit);
-
-  const items = await Promise.all(pageSlice.map((report) => withComments(report)));
+  const total = agg?.total[0]?.count ?? 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items = await Promise.all((agg?.data ?? []).map((r) => withComments(r as any)));
   return paginate(items, total, filters.page, filters.limit);
 }
+
 
 export async function getReportById(id: string, requester: AuthenticatedUser): Promise<PublicReport> {
   const report = await Report.findById(id).populate(POPULATE_FIELDS);

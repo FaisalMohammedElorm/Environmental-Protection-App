@@ -35,11 +35,13 @@ export const listReportsQuerySchema = z.object({
   page: z
     .string()
     .optional()
-    .transform((v) => (v ? Number(v) : 1)),
+    .transform((v) => (v ? Number(v) : 1))
+    .pipe(z.number().int().min(1)),
   limit: z
     .string()
     .optional()
     .transform((v) => (v ? Number(v) : 10))
+    .pipe(z.number().int().min(1).max(100))
 });
 
 export const updateReportSchema = z.object({
@@ -56,7 +58,10 @@ export const updateStatusSchema = z.object({
 });
 
 export const assignReportSchema = z.object({
-  officerId: z.string().min(1, "officerId is required")
+  officerId: z
+    .string()
+    .min(1, "officerId is required")
+    .regex(/^[a-f\d]{24}$/i, "officerId must be a valid ID")
 });
 
 export const addCommentSchema = z.object({

@@ -28,10 +28,6 @@ export async function consumeToken(rawToken: string, type: TokenType) {
   return record;
 }
 
-export async function findValidToken(rawToken: string, type: TokenType) {
-  const tokenHash = hashToken(rawToken);
-  return Token.findOne({ tokenHash, type, expiresAt: { $gt: new Date() } });
-}
 
 export async function revokeToken(rawToken: string, type: TokenType): Promise<void> {
   const tokenHash = hashToken(rawToken);

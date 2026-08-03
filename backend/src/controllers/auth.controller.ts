@@ -45,6 +45,13 @@ export const logoutHandler = catchAsync(async (req: Request, res: Response) => {
   res.status(200).json({ message: "Logged out" });
 });
 
+export const logoutAllHandler = catchAsync(async (req: Request, res: Response) => {
+  await authService.logoutAll(req.user!.id);
+  clearRefreshTokenCookie(res);
+  clearCsrfCookie(res);
+  res.status(200).json({ message: "Logged out of all sessions" });
+});
+
 export const forgotPasswordHandler = catchAsync(async (req: Request, res: Response) => {
   await authService.forgotPassword(req.body.email);
   res.status(200).json({ message: "If that email exists, a reset link has been sent" });

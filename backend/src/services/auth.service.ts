@@ -1,7 +1,7 @@
 import { User, type IUser } from "../models/User";
 import { ApiError } from "../utils/ApiError";
 import { signAccessToken } from "../utils/jwt";
-import { issueToken, consumeToken, revokeToken } from "./token.service";
+import { issueToken, consumeToken, revokeToken, revokeAllUserTokens } from "./token.service";
 import { sendVerificationEmail, sendPasswordResetEmail } from "./email.service";
 
 interface RegisterInput {
@@ -58,6 +58,10 @@ export async function login(input: LoginInput): Promise<AuthResult> {
     throw ApiError.forbidden("This account has been suspended. Contact support for help.");
   }
 
+  if (!user.isEmailVerified) {
+    throw ApiError.forbidden("Please verify your email address before logging in.");
+  }
+
   const accessToken = issueAccessToken(user);
   const refreshToken = await issueToken(user.id, "refresh");
 
@@ -85,6 +89,10 @@ export async function logout(rawRefreshToken: string | undefined): Promise<void>
   if (rawRefreshToken) {
     await revokeToken(rawRefreshToken, "refresh");
   }
+}
+
+export async function logoutAll(userId: string): Promise<void> {
+  await revokeAllUserTokens(userId, "refresh");
 }
 
 export async function forgotPassword(email: string): Promise<void> {

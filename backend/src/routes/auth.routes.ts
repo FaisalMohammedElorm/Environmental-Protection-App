@@ -4,6 +4,7 @@ import {
   loginHandler,
   refreshTokenHandler,
   logoutHandler,
+  logoutAllHandler,
   forgotPasswordHandler,
   resetPasswordHandler,
   verifyEmailHandler,
@@ -27,6 +28,7 @@ router.post("/register", authRateLimiter, validateRequest({ body: registerSchema
 router.post("/login", authRateLimiter, validateRequest({ body: loginSchema }), loginHandler);
 router.post("/refresh-token", verifyCsrfToken, refreshTokenHandler);
 router.post("/logout", verifyCsrfToken, logoutHandler);
+router.post("/logout-all", protect, verifyCsrfToken, logoutAllHandler);
 router.post(
   "/forgot-password",
   authRateLimiter,

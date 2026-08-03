@@ -18,6 +18,10 @@ mongoose.connection.on("disconnected", () => {
   logger.warn("MongoDB disconnected");
 });
 
+mongoose.connection.on("error", (error) => {
+  logger.error(`MongoDB connection error: ${(error as Error).message}`);
+});
+
 export async function disconnectDatabase(): Promise<void> {
   await mongoose.disconnect();
 }

@@ -1,8 +1,12 @@
 import { createApp } from "./app";
 import { env } from "./config/env";
-import { connectDatabase } from "./config/db";
+import { connectDatabase, disconnectDatabase } from "./config/db";
 import { logger } from "./config/logger";
 import { ensureDefaultCategories } from "./services/category.service";
+
+process.on("unhandledRejection", (reason) => {
+  logger.error(`Unhandled rejection: ${String(reason)}`);
+});
 
 async function bootstrap(): Promise<void> {
   await connectDatabase();
@@ -18,16 +22,17 @@ async function bootstrap(): Promise<void> {
     logger.info(`${signal} received. Shutting down gracefully...`);
     server.close(() => {
       logger.info("HTTP server closed.");
-      process.exit(0);
+      disconnectDatabase()
+        .catch((error) => logger.error(`Error while disconnecting MongoDB: ${(error as Error).message}`))
+        .finally(() => process.exit(0));
     });
   };
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
-
-  process.on("unhandledRejection", (reason) => {
-    logger.error(`Unhandled rejection: ${String(reason)}`);
-  });
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  logger.error(`Failed to start server: ${(error as Error).message}`);
+  process.exit(1);
+});

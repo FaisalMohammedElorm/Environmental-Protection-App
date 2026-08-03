@@ -156,13 +156,14 @@ export async function listReports(filters: ListReportsFilters): Promise<Paginate
         data: [
           { $skip: skip },
           { $limit: filters.limit },
+          { $addFields: { id: { $toString: "$_id" } } },
           {
             $lookup: {
               from: "users",
               localField: "reportedBy",
               foreignField: "_id",
               as: "reportedBy",
-              pipeline: [{ $project: { name: 1 } }]
+              pipeline: [{ $project: { name: 1, id: { $toString: "$_id" } } }]
             }
           },
           { $unwind: { path: "$reportedBy", preserveNullAndEmptyArrays: false } },
@@ -172,7 +173,7 @@ export async function listReports(filters: ListReportsFilters): Promise<Paginate
               localField: "assignedTo",
               foreignField: "_id",
               as: "assignedTo",
-              pipeline: [{ $project: { name: 1 } }]
+              pipeline: [{ $project: { name: 1, id: { $toString: "$_id" } } }]
             }
           },
           {

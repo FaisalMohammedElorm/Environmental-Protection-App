@@ -26,15 +26,20 @@ function issueAccessToken(user: IUser): string {
   return signAccessToken({ sub: user.id, role: user.role });
 }
 
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 export async function register(input: RegisterInput): Promise<AuthResult> {
-  const existing = await User.findOne({ email: input.email });
+  const email = normalizeEmail(input.email);
+  const existing = await User.findOne({ email });
   if (existing) {
     throw ApiError.conflict("An account with that email already exists");
   }
 
   const user = await User.create({
     name: input.name,
-    email: input.email,
+    email,
     phone: input.phone,
     password: input.password
   });
@@ -49,7 +54,7 @@ export async function register(input: RegisterInput): Promise<AuthResult> {
 }
 
 export async function login(input: LoginInput): Promise<AuthResult> {
-  const user = await User.findOne({ email: input.email }).select("+password");
+  const user = await User.findOne({ email: normalizeEmail(input.email) }).select("+password");
   if (!user || !(await user.comparePassword(input.password))) {
     throw ApiError.unauthorized("Incorrect email or password");
   }
@@ -96,7 +101,7 @@ export async function logoutAll(userId: string): Promise<void> {
 }
 
 export async function forgotPassword(email: string): Promise<void> {
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email: normalizeEmail(email) });
   if (!user) return; // Don't reveal whether the email is registered.
 
   const resetToken = await issueToken(user.id, "password_reset");

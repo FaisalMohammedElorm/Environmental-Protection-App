@@ -61,7 +61,7 @@ export const assignReportSchema = z.object({
   officerId: z
     .string()
     .min(1, "officerId is required")
-    .regex(/^[a-f\d]{24}$/i, "officerId must be a valid ID")
+    .uuid("officerId must be a valid ID")
 });
 
 export const addCommentSchema = z.object({

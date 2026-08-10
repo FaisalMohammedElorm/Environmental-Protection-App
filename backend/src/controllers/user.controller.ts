@@ -8,11 +8,6 @@ export const updateProfileHandler = catchAsync(async (req: Request, res: Respons
   res.status(200).json(user);
 });
 
-export const changePasswordHandler = catchAsync(async (req: Request, res: Response) => {
-  await userService.changePassword(req.user!.id, req.body.currentPassword, req.body.newPassword);
-  res.status(200).json({ message: "Password updated successfully" });
-});
-
 export const uploadAvatarHandler = catchAsync(async (req: Request, res: Response) => {
   const file = req.file as Express.Multer.File | undefined;
   if (!file) {

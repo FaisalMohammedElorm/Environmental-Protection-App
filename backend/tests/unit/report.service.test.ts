@@ -1,9 +1,8 @@
 import * as reportService from "../../src/services/report.service";
-import { createTestUser } from "../helpers";
+import { createTestUser, type TestUser } from "../helpers";
 import { ApiError } from "../../src/utils/ApiError";
-import type { IUser } from "../../src/models/User";
 
-async function createSampleReport(citizen: IUser) {
+async function createSampleReport(citizen: TestUser) {
   return reportService.createReport(citizen.id, {
     category: "illegal_dumping",
     severity: "high",
@@ -136,13 +135,9 @@ describe("report.service", () => {
       const citizen = await createTestUser({ role: "citizen" });
       const report = await createSampleReport(citizen);
 
-      await expect(
-        reportService.deleteReport(report.id, { id: citizen.id, role: "citizen" })
-      ).resolves.toBeUndefined();
+      await expect(reportService.deleteReport(report.id, citizen)).resolves.toBeUndefined();
 
-      await expect(
-        reportService.getReportById(report.id, { id: citizen.id, role: "citizen" })
-      ).rejects.toThrow(ApiError);
+      await expect(reportService.getReportById(report.id, citizen)).rejects.toThrow(ApiError);
     });
 
     it("rejects deletion by a different citizen", async () => {
@@ -150,9 +145,7 @@ describe("report.service", () => {
       const otherCitizen = await createTestUser({ role: "citizen" });
       const report = await createSampleReport(citizen);
 
-      await expect(
-        reportService.deleteReport(report.id, { id: otherCitizen.id, role: "citizen" })
-      ).rejects.toThrow(ApiError);
+      await expect(reportService.deleteReport(report.id, otherCitizen)).rejects.toThrow(ApiError);
     });
 
     it("allows an admin to delete any report", async () => {
@@ -160,9 +153,7 @@ describe("report.service", () => {
       const admin = await createTestUser({ role: "admin" });
       const report = await createSampleReport(citizen);
 
-      await expect(
-        reportService.deleteReport(report.id, { id: admin.id, role: "admin" })
-      ).resolves.toBeUndefined();
+      await expect(reportService.deleteReport(report.id, admin)).resolves.toBeUndefined();
     });
   });
 
@@ -171,11 +162,9 @@ describe("report.service", () => {
       const citizen = await createTestUser({ role: "citizen" });
       const report = await createSampleReport(citizen);
 
-      const updated = await reportService.updateReportDetails(
-        report.id,
-        { id: citizen.id, role: "citizen" },
-        { description: "An even larger pile of waste, now blocking the road" }
-      );
+      const updated = await reportService.updateReportDetails(report.id, citizen, {
+        description: "An even larger pile of waste, now blocking the road"
+      });
 
       expect(updated.description).toContain("blocking the road");
     });
@@ -186,11 +175,9 @@ describe("report.service", () => {
       await reportService.updateReportStatus(report.id, "under_review");
 
       await expect(
-        reportService.updateReportDetails(
-          report.id,
-          { id: citizen.id, role: "citizen" },
-          { description: "Trying to edit after review has started" }
-        )
+        reportService.updateReportDetails(report.id, citizen, {
+          description: "Trying to edit after review has started"
+        })
       ).rejects.toThrow(ApiError);
     });
   });
@@ -201,11 +188,7 @@ describe("report.service", () => {
       const officer = await createTestUser({ role: "officer" });
       const report = await createSampleReport(citizen);
 
-      const updated = await reportService.addComment(
-        report.id,
-        { id: officer.id, role: "officer" },
-        "We've dispatched a team to assess this."
-      );
+      const updated = await reportService.addComment(report.id, officer, "We've dispatched a team to assess this.");
 
       expect(updated.comments).toHaveLength(1);
       expect(updated.comments[0]?.body).toContain("dispatched");
@@ -219,18 +202,14 @@ describe("report.service", () => {
       const otherCitizen = await createTestUser({ role: "citizen" });
       const report = await createSampleReport(owner);
 
-      await expect(
-        reportService.getReportById(report.id, { id: otherCitizen.id, role: "citizen" })
-      ).rejects.toThrow(ApiError);
+      await expect(reportService.getReportById(report.id, otherCitizen)).rejects.toThrow(ApiError);
     });
 
     it("allows the owning citizen to view their own report", async () => {
       const owner = await createTestUser({ role: "citizen" });
       const report = await createSampleReport(owner);
 
-      await expect(
-        reportService.getReportById(report.id, { id: owner.id, role: "citizen" })
-      ).resolves.toMatchObject({ id: report.id });
+      await expect(reportService.getReportById(report.id, owner)).resolves.toMatchObject({ id: report.id });
     });
 
     it("allows officers and admins to view any report", async () => {
@@ -238,9 +217,7 @@ describe("report.service", () => {
       const officer = await createTestUser({ role: "officer" });
       const report = await createSampleReport(owner);
 
-      await expect(
-        reportService.getReportById(report.id, { id: officer.id, role: "officer" })
-      ).resolves.toMatchObject({ id: report.id });
+      await expect(reportService.getReportById(report.id, officer)).resolves.toMatchObject({ id: report.id });
     });
 
     it("prevents a citizen from commenting on another citizen's report", async () => {
@@ -248,9 +225,7 @@ describe("report.service", () => {
       const otherCitizen = await createTestUser({ role: "citizen" });
       const report = await createSampleReport(owner);
 
-      await expect(
-        reportService.addComment(report.id, { id: otherCitizen.id, role: "citizen" }, "Trying to snoop")
-      ).rejects.toThrow(ApiError);
+      await expect(reportService.addComment(report.id, otherCitizen, "Trying to snoop")).rejects.toThrow(ApiError);
     });
   });
 });

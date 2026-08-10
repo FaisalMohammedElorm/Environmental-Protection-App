@@ -27,9 +27,9 @@ export default function LoginPage() {
   const mutation = useMutation({
     mutationFn: login,
     onSuccess: (data) => {
-      toast.success(`Welcome back, ${data.user.name.split(" ")[0]}`);
-      if (data.user.role === "admin") router.push("/admin");
-      else if (data.user.role === "officer") router.push("/officer");
+      toast.success(`Welcome back, ${data.name.split(" ")[0]}`);
+      if (data.role === "admin") router.push("/admin");
+      else if (data.role === "officer") router.push("/officer");
       else router.push("/dashboard");
     },
     onError: () => {

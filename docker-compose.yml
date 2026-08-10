@@ -1,37 +1,4 @@
 services:
-  mongodb:
-    image: mongo:7
-    container_name: ecoalert-mongodb
-    restart: unless-stopped
-    # Not published to the host: the backend reaches this over the internal Docker network
-    # as `mongodb:27017`. Publishing 27017 to the host would let anyone who can reach this
-    # machine's network attempt to connect directly to the database.
-    expose:
-      - "27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-ecoalert_admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
-      MONGO_INITDB_DATABASE: ecoalert
-    volumes:
-      - mongodb_data:/data/db
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "mongosh",
-          "--username",
-          "${MONGO_ROOT_USERNAME:-ecoalert_admin}",
-          "--password",
-          "${MONGO_ROOT_PASSWORD}",
-          "--authenticationDatabase",
-          "admin",
-          "--eval",
-          "db.adminCommand('ping')"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   backend:
     build:
       context: ./backend
@@ -40,30 +7,22 @@ services:
     restart: unless-stopped
     ports:
       - "5000:5000"
-    depends_on:
-      mongodb:
-        condition: service_healthy
     environment:
       PORT: 5000
       NODE_ENV: production
       CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
-      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-ecoalert_admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/ecoalert?authSource=admin
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
+      DATABASE_URL: ${DATABASE_URL}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       EMAIL_HOST: ${EMAIL_HOST:-}
       EMAIL_PORT: ${EMAIL_PORT:-587}
       EMAIL_USER: ${EMAIL_USER:-}
       EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
       EMAIL_FROM: ${EMAIL_FROM:-EcoAlert <no-reply@ecoalert.app>}
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
       RATE_LIMIT_WINDOW_MINUTES: ${RATE_LIMIT_WINDOW_MINUTES:-15}
       RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-200}
     volumes:
-      - backend_uploads:/app/uploads
       - backend_logs:/app/logs
 
   frontend:
@@ -78,10 +37,10 @@ services:
       - backend
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000/api/v1}
+      NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       NEXT_PUBLIC_MAP_API_KEY: ${NEXT_PUBLIC_MAP_API_KEY:-}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-EcoAlert}
 
 volumes:
-  mongodb_data:
-  backend_uploads:
   backend_logs:

@@ -1,43 +1,50 @@
-import { MongoMemoryServer } from "mongodb-memory-server";
-import mongoose from "mongoose";
-
 // Environment variables must be set before any module (e.g. src/config/env.ts) is imported,
-// since that module validates and freezes process.env values at import time.
+// since that module validates process.env at import time. backend/.env (dotenv, loaded by
+// config/env.ts itself) supplies the real Supabase project values — these tests run against
+// that live project's Postgres + Auth rather than an ephemeral local database, since this
+// project has no Docker available for a local Postgres and Supabase signs tokens with an
+// asymmetric key that can't be forged locally either way.
 process.env.NODE_ENV = "test";
-process.env.JWT_SECRET = "test_jwt_secret_test_jwt_secret_32c";
-process.env.JWT_REFRESH_SECRET = "test_refresh_secret_test_refresh_secret";
-process.env.CLIENT_URL = "http://localhost:3000";
-// Placeholder to satisfy env schema validation at module-import time — the real connection
-// below uses the in-memory server's URI directly via mongoose.connect(), not this value.
-process.env.MONGODB_URI = "mongodb://127.0.0.1:27017/ecoalert-test-placeholder";
 
-// These tests spin up a real, in-memory MongoDB instance via mongodb-memory-server.
-// The first run downloads a mongod binary (cached afterward in ~/.cache/mongodb-binaries) —
-// this requires outbound internet access to https://fastdl.mongodb.org. In network-restricted
-// CI or sandboxed environments without that access, either pre-seed the binary cache or point
-// MONGOMS_SYSTEM_BINARY at a mongod already installed on the box.
+import { sql } from "../src/config/db";
+import { supabaseAdmin } from "../src/config/supabaseAdmin";
+import { ensureDefaultCategories } from "../src/services/category.service";
+import { resetCreatedUserIds, getCreatedUserIds } from "./helpers";
 
-let mongoServer: MongoMemoryServer;
-
-beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
+beforeAll(() => {
+  resetCreatedUserIds();
 });
 
 beforeEach(async () => {
-  // Report category is now validated against the live Category collection rather than a
-  // fixed enum (see docs/ARCHITECTURE.md) — seed the defaults before every test so tests
-  // that create reports with e.g. category: "illegal_dumping" keep working unchanged.
-  const { ensureDefaultCategories } = await import("../src/services/category.service");
+  // Report category is validated against the live categories table rather than a fixed
+  // enum — seed the defaults before every test so tests that create reports with e.g.
+  // category: "illegal_dumping" keep working unchanged.
   await ensureDefaultCategories();
 });
 
 afterEach(async () => {
-  const collections = mongoose.connection.collections;
-  await Promise.all(Object.values(collections).map((collection) => collection.deleteMany({})));
+  // Wipes categories, reports, comments, notifications, and audit_logs (CASCADE picks up
+  // everything that references them) between every test, mirroring the old Mongo
+  // deleteMany({})-on-every-collection reset. profiles/auth users are deliberately left
+  // alone here — they're cleaned up once per file in afterAll below — and settings is
+  // reset back to its column defaults instead of being wiped (it's a singleton row).
+  await sql`truncate table public.categories, public.reports, public.comments, public.notifications, public.audit_logs cascade`;
+  await sql`
+    update public.settings
+    set
+      site_name = default,
+      support_email = default,
+      auto_assign_reports = default,
+      report_resolution_sla_hours = default,
+      allow_public_report_submission = default
+    where id = true
+  `;
 });
 
 afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer?.stop();
+  const ids = getCreatedUserIds();
+  await Promise.all(
+    ids.map((id) => supabaseAdmin.auth.admin.deleteUser(id).catch(() => undefined))
+  );
+  await sql.end();
 });

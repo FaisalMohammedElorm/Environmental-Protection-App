@@ -1,27 +1,22 @@
-import mongoose from "mongoose";
+import postgres from "postgres";
 import { env } from "./env";
 import { logger } from "./logger";
 
-mongoose.set("strictQuery", true);
+export const sql = postgres(env.databaseUrl, {
+  max: 10,
+  onnotice: () => {}
+});
 
 export async function connectDatabase(): Promise<void> {
   try {
-    await mongoose.connect(env.mongodbUri, { serverSelectionTimeoutMS: 10000 });
-    logger.info(`MongoDB connected: ${mongoose.connection.host}`);
+    await sql`select 1`;
+    logger.info("Postgres connected");
   } catch (error) {
-    logger.error(`MongoDB connection failed: ${(error as Error).message}`);
+    logger.error(`Postgres connection failed: ${(error as Error).message}`);
     process.exit(1);
   }
 }
 
-mongoose.connection.on("disconnected", () => {
-  logger.warn("MongoDB disconnected");
-});
-
-mongoose.connection.on("error", (error) => {
-  logger.error(`MongoDB connection error: ${(error as Error).message}`);
-});
-
 export async function disconnectDatabase(): Promise<void> {
-  await mongoose.disconnect();
+  await sql.end();
 }

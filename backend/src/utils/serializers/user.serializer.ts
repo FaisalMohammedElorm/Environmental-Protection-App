@@ -1,4 +1,13 @@
-import type { IUser } from "../../models/User";
+export interface ProfileRow {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  phone: string | null;
+  avatar_url: string | null;
+  is_active: boolean;
+  created_at: Date;
+}
 
 export interface PublicUser {
   id: string;
@@ -8,20 +17,18 @@ export interface PublicUser {
   phone?: string;
   avatarUrl?: string;
   isActive: boolean;
-  isEmailVerified: boolean;
   createdAt: string;
 }
 
-export function serializeUser(user: IUser): PublicUser {
+export function serializeUser(row: ProfileRow): PublicUser {
   return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    phone: user.phone,
-    avatarUrl: user.avatarUrl,
-    isActive: user.isActive,
-    isEmailVerified: user.isEmailVerified,
-    createdAt: user.createdAt.toISOString()
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    phone: row.phone ?? undefined,
+    avatarUrl: row.avatar_url ?? undefined,
+    isActive: row.is_active,
+    createdAt: row.created_at.toISOString()
   };
 }

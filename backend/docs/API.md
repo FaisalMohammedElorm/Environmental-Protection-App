@@ -3,47 +3,15 @@
 Base URL: `/api/v1`
 
 All request/response bodies are JSON unless noted. Authenticated endpoints require an
-`Authorization: Bearer <accessToken>` header. The refresh token is managed automatically via
-an httpOnly cookie scoped to `/api/v1/auth` — it is never exposed to client-side JavaScript.
+`Authorization: Bearer <token>` header, where `<token>` is the `access_token` from a Supabase
+Auth session — Express verifies it against Supabase's JWKS endpoint on every request.
 
 ## Authentication
 
-### `POST /auth/register`
-Create a citizen account. Sends a verification email (no-op if SMTP isn't configured).
-
-Request:
-```json
-{ "name": "Ama Owusu", "email": "ama@example.com", "phone": "+233550000000", "password": "Str0ngPass" }
-```
-Response `201`:
-```json
-{ "user": { "id": "...", "name": "Ama Owusu", "email": "ama@example.com", "role": "citizen", "isEmailVerified": false, "createdAt": "..." }, "accessToken": "..." }
-```
-
-### `POST /auth/login`
-Request: `{ "email": "...", "password": "..." }`
-Response `200`: same shape as register.
-
-### `POST /auth/refresh-token`
-No body — reads the refresh token from the cookie. Requires an `X-CSRF-Token` header matching
-the (non-httpOnly) `csrfToken` cookie set on login/register — this is the only pair of endpoints
-that authenticate purely via cookie, so they're the only ones that need CSRF protection.
-Response `200`: `{ "accessToken": "..." }`.
-
-### `POST /auth/logout`
-Same CSRF requirement as above. Revokes the current refresh token and clears both cookies.
-
-### `POST /auth/forgot-password`
-Request: `{ "email": "..." }`. Always returns `200` regardless of whether the email exists.
-
-### `POST /auth/reset-password`
-Request: `{ "token": "...", "password": "..." }`.
-
-### `POST /auth/verify-email`
-Request: `{ "token": "..." }`.
-
-### `GET /auth/me` 🔒
-Returns the current authenticated user.
+There are no `/auth/*` endpoints on this API. Signup, login, logout, session refresh,
+password reset, and email verification all go directly from the frontend to Supabase Auth
+(`supabase.auth.*` via `@supabase/ssr`/`supabase-js`) — Express never sees a password and
+issues no tokens of its own. See `docs/ARCHITECTURE.md` for the full flow.
 
 ## Reports
 
@@ -99,10 +67,12 @@ Query: `page`, `limit`. Paginated, newest first.
 ## Users (self-service) 🔒
 
 ### `PATCH /users/me`
-Request: `{ "name"?, "email"?, "phone"? }`.
+Request: `{ "name"?, "phone"? }`. Email and password changes go through Supabase Auth directly
+(`supabase.auth.updateUser(...)`) — not this endpoint.
 
-### `POST /users/me/change-password`
-Request: `{ "currentPassword", "newPassword" }`.
+### `POST /users/me/avatar`
+`multipart/form-data`, field `avatar` (JPEG/PNG/WEBP, 5MB max). Stored in the public
+`avatars` Supabase Storage bucket.
 
 ## Admin (admin only) 👮
 

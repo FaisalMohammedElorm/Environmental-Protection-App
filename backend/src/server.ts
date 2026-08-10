@@ -23,7 +23,7 @@ async function bootstrap(): Promise<void> {
     server.close(() => {
       logger.info("HTTP server closed.");
       disconnectDatabase()
-        .catch((error) => logger.error(`Error while disconnecting MongoDB: ${(error as Error).message}`))
+        .catch((error) => logger.error(`Error while closing the database connection: ${(error as Error).message}`))
         .finally(() => process.exit(0));
     });
   };

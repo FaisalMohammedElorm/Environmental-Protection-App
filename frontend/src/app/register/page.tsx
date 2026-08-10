@@ -1,11 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import toast from "react-hot-toast";
+import { MailCheck } from "lucide-react";
 
 import { AuthLayout } from "@/components/ui/auth-layout";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import { register as registerUser } from "@/lib/api/auth";
 import { registerSchema, type RegisterFormValues } from "@/lib/validators/auth";
 
 export default function RegisterPage() {
-  const router = useRouter();
+  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
 
   const {
     register: registerField,
@@ -27,14 +27,34 @@ export default function RegisterPage() {
 
   const mutation = useMutation({
     mutationFn: registerUser,
-    onSuccess: () => {
-      toast.success("Account created — check your email to verify it");
-      router.push("/dashboard");
+    onSuccess: (_data, variables) => {
+      setSubmittedEmail(variables.email);
     },
     onError: () => {
-      toast.error("Could not create your account. That email may already be registered.");
+      // no-op — the form below surfaces its own toast via the button state
     }
   });
+
+  // Supabase doesn't grant a session until the email is confirmed, so there's
+  // nowhere to redirect to yet — show the same "check your inbox" pattern
+  // the forgot-password flow uses instead.
+  if (submittedEmail) {
+    return (
+      <AuthLayout eyebrow="Almost there" title="Confirm your email">
+        <div className="rounded-2xl border border-canopy-100 dark:border-canopy-700 bg-mist/60 dark:bg-canopy-800/60 p-6">
+          <MailCheck className="h-8 w-8 text-moss-dark" strokeWidth={1.75} />
+          <p className="mt-4 text-sm text-canopy-600 dark:text-canopy-300">
+            We've sent a confirmation link to{" "}
+            <span className="font-semibold text-canopy-800 dark:text-canopy-100">{submittedEmail}</span>. Open it to
+            activate your account.
+          </p>
+        </div>
+        <Link href="/login" className="mt-6 inline-block text-sm font-semibold text-canopy-700 dark:text-canopy-200">
+          Back to log in
+        </Link>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout
@@ -108,6 +128,10 @@ export default function RegisterPage() {
           error={errors.agreeToTerms?.message}
           {...registerField("agreeToTerms")}
         />
+
+        {mutation.isError ? (
+          <p className="text-sm text-alert-clay">Could not create your account. That email may already be registered.</p>
+        ) : null}
 
         <Button type="submit" fullWidth isLoading={mutation.isPending}>
           Create account

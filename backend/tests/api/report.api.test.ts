@@ -1,7 +1,7 @@
 import request from "supertest";
 import { createApp } from "../../src/app";
 import { createTestUser, authHeader } from "../helpers";
-import { Notification } from "../../src/models/Notification";
+import { sql } from "../../src/config/db";
 
 const app = createApp();
 
@@ -100,7 +100,7 @@ describe("Reports API", () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("under_review");
 
-    const notifications = await Notification.find({ user: citizen.id });
+    const notifications = await sql<{ type: string }[]>`select type from public.notifications where user_id = ${citizen.id}`;
     expect(notifications).toHaveLength(1);
     expect(notifications[0]?.type).toBe("report_status_changed");
   });

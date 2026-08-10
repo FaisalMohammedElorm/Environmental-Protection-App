@@ -1,6 +1,5 @@
 import { Router } from "express";
-import mongoose from "mongoose";
-import authRoutes from "./auth.routes";
+import { sql } from "../config/db";
 import reportRoutes from "./report.routes";
 import categoryRoutes from "./category.routes";
 import notificationRoutes from "./notification.routes";
@@ -11,16 +10,15 @@ import contactRoutes from "./contact.routes";
 
 const router = Router();
 
-router.get("/health", (req, res) => {
-  const dbConnected = mongoose.connection.readyState === 1;
-  res.status(dbConnected ? 200 : 503).json({
-    status: dbConnected ? "ok" : "degraded",
-    database: dbConnected ? "connected" : "disconnected",
-    timestamp: new Date().toISOString()
-  });
+router.get("/health", async (req, res) => {
+  try {
+    await sql`select 1`;
+    res.status(200).json({ status: "ok", database: "connected", timestamp: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ status: "degraded", database: "disconnected", timestamp: new Date().toISOString() });
+  }
 });
 
-router.use("/auth", authRoutes);
 router.use("/reports", reportRoutes);
 router.use("/categories", categoryRoutes);
 router.use("/notifications", notificationRoutes);

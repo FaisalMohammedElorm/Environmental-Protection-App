@@ -8,16 +8,11 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   CLIENT_URL: z.string().default("http://localhost:3000"),
 
-  MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
+  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
 
-  JWT_SECRET: z
-    .string()
-    .min(32, "JWT_SECRET must be at least 32 characters — generate one with `openssl rand -hex 32`"),
-  JWT_EXPIRES_IN: z.string().default("15m"),
-  JWT_REFRESH_SECRET: z
-    .string()
-    .min(32, "JWT_REFRESH_SECRET must be at least 32 characters — generate one with `openssl rand -hex 32`"),
-  JWT_REFRESH_EXPIRES_IN: z.string().default("30d"),
+  SUPABASE_URL: z.string().min(1, "SUPABASE_URL is required"),
+  SUPABASE_ANON_KEY: z.string().min(1, "SUPABASE_ANON_KEY is required"),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, "SUPABASE_SERVICE_ROLE_KEY is required"),
 
   EMAIL_HOST: z.string().optional().default(""),
   EMAIL_PORT: z.string().optional().default("587"),
@@ -25,15 +20,8 @@ const envSchema = z.object({
   EMAIL_PASSWORD: z.string().optional().default(""),
   EMAIL_FROM: z.string().optional().default("EcoAlert <no-reply@ecoalert.app>"),
 
-  CLOUDINARY_CLOUD_NAME: z.string().optional().default(""),
-  CLOUDINARY_API_KEY: z.string().optional().default(""),
-  CLOUDINARY_API_SECRET: z.string().optional().default(""),
-
   RATE_LIMIT_WINDOW_MINUTES: z.string().default("15"),
   RATE_LIMIT_MAX_REQUESTS: z.string().default("200")
-}).refine((data) => data.JWT_SECRET !== data.JWT_REFRESH_SECRET, {
-  message: "JWT_SECRET and JWT_REFRESH_SECRET must be different values",
-  path: ["JWT_REFRESH_SECRET"]
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -50,15 +38,18 @@ export const env = {
   port: Number(parsedEnv.PORT),
   nodeEnv: parsedEnv.NODE_ENV,
   clientUrl: parsedEnv.CLIENT_URL,
+  // CLIENT_URL may be a comma-separated list (e.g. local dev origin + deployed frontend origin)
+  clientUrls: parsedEnv.CLIENT_URL.split(",").map((url) => url.trim()).filter(Boolean),
   isProduction: parsedEnv.NODE_ENV === "production",
   isTest: parsedEnv.NODE_ENV === "test",
 
-  mongodbUri: parsedEnv.MONGODB_URI,
+  databaseUrl: parsedEnv.DATABASE_URL,
 
-  jwtSecret: parsedEnv.JWT_SECRET,
-  jwtExpiresIn: parsedEnv.JWT_EXPIRES_IN,
-  jwtRefreshSecret: parsedEnv.JWT_REFRESH_SECRET,
-  jwtRefreshExpiresIn: parsedEnv.JWT_REFRESH_EXPIRES_IN,
+  supabase: {
+    url: parsedEnv.SUPABASE_URL,
+    anonKey: parsedEnv.SUPABASE_ANON_KEY,
+    serviceRoleKey: parsedEnv.SUPABASE_SERVICE_ROLE_KEY
+  },
 
   email: {
     host: parsedEnv.EMAIL_HOST,
@@ -66,12 +57,6 @@ export const env = {
     user: parsedEnv.EMAIL_USER,
     password: parsedEnv.EMAIL_PASSWORD,
     from: parsedEnv.EMAIL_FROM
-  },
-
-  cloudinary: {
-    cloudName: parsedEnv.CLOUDINARY_CLOUD_NAME,
-    apiKey: parsedEnv.CLOUDINARY_API_KEY,
-    apiSecret: parsedEnv.CLOUDINARY_API_SECRET
   },
 
   rateLimit: {

@@ -1,68 +1,89 @@
-import { Category, type ICategory } from "../models/Category";
-import { Report } from "../models/Report";
+import { sql } from "../config/db";
 import { ApiError } from "../utils/ApiError";
-import { serializeCategory, type PublicCategory } from "../utils/serializers/category.serializer";
+import { serializeCategory, type PublicCategory, type CategoryRow } from "../utils/serializers/category.serializer";
 import { DEFAULT_CATEGORIES } from "../types/enums";
 import { logger } from "../config/logger";
 
 export async function listCategories(): Promise<PublicCategory[]> {
-  const categories = await Category.find().sort({ name: 1 });
-
-  // Single aggregation for all report counts, instead of one query per category.
-  const counts = await Report.aggregate<{ _id: string; count: number }>([
-    { $group: { _id: "$category", count: { $sum: 1 } } }
-  ]);
-  const countsBySlug = new Map(counts.map((row) => [row._id, row.count]));
-
-  return categories.map((category) => serializeCategory(category, countsBySlug.get(category.slug) ?? 0));
+  const rows = await sql<CategoryRow[]>`
+    select c.id, c.name, c.slug, c.description, c.is_active,
+           count(r.id)::int as report_count
+    from public.categories c
+    left join public.reports r on r.category_id = c.id
+    group by c.id
+    order by c.name
+  `;
+  return rows.map(serializeCategory);
 }
 
 /**
- * Seeds the original 11 default categories on first boot, so report submission has
- * something to select from out of the box. Safe to call on every startup — it only
- * inserts categories that don't already exist (matched by name) and never overwrites
- * or reactivates ones an admin has since edited or deactivated.
+ * Seeds the original 11 default categories, so report submission has
+ * something to select from out of the box. Safe to call on every startup —
+ * it only inserts categories that don't already exist (matched by name) and
+ * never overwrites or reactivates ones an admin has since edited or
+ * deactivated. The 0010 migration already seeds these once; this is a
+ * defensive fallback for a schema that was applied without seed data.
  */
 export async function ensureDefaultCategories(): Promise<void> {
-  const existingNames = new Set((await Category.find().select("name")).map((c) => c.name));
-  const missing = DEFAULT_CATEGORIES.filter((name) => !existingNames.has(name));
+  const inserted = await sql<{ name: string }[]>`
+    insert into public.categories (name)
+    select unnest(${DEFAULT_CATEGORIES}::text[])
+    on conflict (name) do nothing
+    returning name
+  `;
 
-  if (missing.length === 0) return;
-
-  await Category.insertMany(missing.map((name) => ({ name })));
-  logger.info(`Seeded ${missing.length} default categories`);
+  if (inserted.length > 0) {
+    logger.info(`Seeded ${inserted.length} default categories`);
+  }
 }
 
 export async function createCategory(input: { name: string; description?: string }): Promise<PublicCategory> {
-  const existing = await Category.findOne({ name: input.name });
-  if (existing) throw ApiError.conflict("A category with that name already exists");
+  const existing = await sql`select id from public.categories where name = ${input.name}`;
+  if (existing.length > 0) throw ApiError.conflict("A category with that name already exists");
 
-  const category = await Category.create(input);
-  return serializeCategory(category);
+  const [row] = await sql<CategoryRow[]>`
+    insert into public.categories (name, description)
+    values (${input.name}, ${input.description ?? null})
+    returning id, name, slug, description, is_active
+  `;
+  return serializeCategory({ ...row!, report_count: 0 });
 }
 
-async function findCategoryOrThrow(id: string): Promise<ICategory> {
-  const category = await Category.findById(id);
-  if (!category) throw ApiError.notFound("Category not found");
-  return category;
+async function findCategoryOrThrow(id: string): Promise<CategoryRow> {
+  const [row] = await sql<CategoryRow[]>`
+    select id, name, slug, description, is_active from public.categories where id = ${id}
+  `;
+  if (!row) throw ApiError.notFound("Category not found");
+  return row;
 }
 
 export async function updateCategory(
   id: string,
   updates: { name?: string; description?: string; isActive?: boolean }
 ): Promise<PublicCategory> {
-  const category = await findCategoryOrThrow(id);
+  const current = await findCategoryOrThrow(id);
 
-  if (updates.name !== undefined) category.name = updates.name;
-  if (updates.description !== undefined) category.description = updates.description;
-  if (updates.isActive !== undefined) category.isActive = updates.isActive;
+  const name = updates.name ?? current.name;
+  const description = updates.description !== undefined ? updates.description : current.description;
+  const isActive = updates.isActive ?? current.is_active;
 
-  await category.save();
-  const reportCount = await Report.countDocuments({ category: category.slug });
-  return serializeCategory(category, reportCount);
+  const [row] = await sql<CategoryRow[]>`
+    update public.categories
+    set name = ${name}, description = ${description}, is_active = ${isActive}
+    where id = ${id}
+    returning id, name, slug, description, is_active
+  `;
+
+  const countRows = await sql<{ count: number }[]>`
+    select count(*)::int as count from public.reports where category_id = ${id}
+  `;
+
+  return serializeCategory({ ...row!, report_count: countRows[0]!.count });
 }
 
 export async function deleteCategory(id: string): Promise<void> {
-  const category = await findCategoryOrThrow(id);
-  await category.deleteOne();
+  await findCategoryOrThrow(id);
+  // reports.category_id is ON DELETE RESTRICT — deleting a category still in
+  // use throws a foreign_key_violation, mapped by errorHandler.ts to a 409.
+  await sql`delete from public.categories where id = ${id}`;
 }

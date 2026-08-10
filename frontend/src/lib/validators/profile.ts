@@ -1,8 +1,9 @@
 import { z } from "zod";
 
+// Email changes go through Supabase Auth directly (its own confirmation
+// flow) — this form only ever touches profile fields Express owns.
 export const profileSchema = z.object({
   name: z.string().min(2, "Enter your full name"),
-  email: z.string().min(1, "Email is required").email("Enter a valid email"),
   phone: z.string().optional().or(z.literal(""))
 });
 

@@ -21,33 +21,9 @@ async function sendMail({ to, subject, html }: SendMailOptions): Promise<void> {
   }
 }
 
-export async function sendVerificationEmail(to: string, name: string, rawToken: string): Promise<void> {
-  const verifyUrl = `${env.clientUrl}/verify-email?token=${rawToken}`;
-  await sendMail({
-    to,
-    subject: "Verify your EcoAlert email",
-    html: `
-      <p>Hi ${name},</p>
-      <p>Welcome to EcoAlert. Please verify your email address to activate your account:</p>
-      <p><a href="${verifyUrl}">${verifyUrl}</a></p>
-      <p>This link expires in 24 hours.</p>
-    `
-  });
-}
-
-export async function sendPasswordResetEmail(to: string, name: string, rawToken: string): Promise<void> {
-  const resetUrl = `${env.clientUrl}/reset-password?token=${rawToken}`;
-  await sendMail({
-    to,
-    subject: "Reset your EcoAlert password",
-    html: `
-      <p>Hi ${name},</p>
-      <p>We received a request to reset your password. Click the link below to choose a new one:</p>
-      <p><a href="${resetUrl}">${resetUrl}</a></p>
-      <p>This link expires in 30 minutes. If you didn't request this, you can safely ignore this email.</p>
-    `
-  });
-}
+// Email verification and password reset are now Supabase Auth's job — it
+// sends its own emails (built-in sender or your custom SMTP configured in
+// the Supabase dashboard) as part of signUp()/resetPasswordForEmail().
 
 export async function sendReportStatusEmail(
   to: string,

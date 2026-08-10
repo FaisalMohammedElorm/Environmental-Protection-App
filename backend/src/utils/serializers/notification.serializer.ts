@@ -1,4 +1,12 @@
-import type { INotification } from "../../models/Notification";
+export interface NotificationRow {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  is_read: boolean;
+  related_report_id: string | null;
+  created_at: Date;
+}
 
 export interface PublicNotification {
   id: string;
@@ -10,14 +18,14 @@ export interface PublicNotification {
   createdAt: string;
 }
 
-export function serializeNotification(notification: INotification): PublicNotification {
+export function serializeNotification(row: NotificationRow): PublicNotification {
   return {
-    id: notification.id,
-    type: notification.type,
-    title: notification.title,
-    body: notification.body,
-    isRead: notification.isRead,
-    relatedReportId: notification.relatedReport?.toString(),
-    createdAt: notification.createdAt.toISOString()
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    body: row.body,
+    isRead: row.is_read,
+    relatedReportId: row.related_report_id ?? undefined,
+    createdAt: row.created_at.toISOString()
   };
 }

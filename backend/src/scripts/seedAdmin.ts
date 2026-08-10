@@ -2,7 +2,7 @@
  * Creates the first admin account on a fresh deployment.
  *
  * Without this, there is no way to reach the admin dashboard at all — every
- * registration defaults to "citizen", and promoting someone to "admin" requires
+ * signup defaults to "citizen", and promoting someone to "admin" requires
  * an existing admin to call PATCH /admin/users/:id/role.
  *
  * Usage:
@@ -10,9 +10,9 @@
  *
  * Safe to re-run: if an admin account already exists, it does nothing.
  */
-import { connectDatabase, disconnectDatabase } from "../config/db";
+import { sql, connectDatabase, disconnectDatabase } from "../config/db";
+import { supabaseAdmin } from "../config/supabaseAdmin";
 import { logger } from "../config/logger";
-import { User } from "../models/User";
 
 export async function seedAdmin(): Promise<void> {
   const name = process.env.ADMIN_NAME;
@@ -33,32 +33,40 @@ export async function seedAdmin(): Promise<void> {
     return;
   }
 
-  const existingAdmin = await User.findOne({ role: "admin" });
+  const [existingAdmin] = await sql<{ email: string }[]>`
+    select email from public.profiles where role = 'admin' limit 1
+  `;
   if (existingAdmin) {
     logger.info(`An admin account already exists (${existingAdmin.email}). Nothing to do.`);
     return;
   }
 
-  const existingEmail = await User.findOne({ email });
-  if (existingEmail) {
-    existingEmail.role = "admin";
-    existingEmail.isActive = true;
-    existingEmail.isEmailVerified = true;
-    await existingEmail.save();
+  const [existingProfile] = await sql<{ id: string }[]>`
+    select id from public.profiles where email = ${email}
+  `;
+  if (existingProfile) {
+    await sql`update public.profiles set role = 'admin', is_active = true where id = ${existingProfile.id}`;
     logger.info(`Promoted existing user ${email} to admin.`);
     return;
   }
 
-  const admin = await User.create({
-    name,
+  // Creates the auth.users row directly (bypassing the normal signup/email-
+  // confirmation flow) — handle_new_user then auto-creates the matching
+  // 'citizen' profile row, which we immediately promote below.
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
-    role: "admin",
-    isActive: true,
-    isEmailVerified: true
+    email_confirm: true,
+    user_metadata: { name }
   });
 
-  logger.info(`Admin account created: ${admin.email}`);
+  if (error || !data.user) {
+    throw new Error(`Failed to create admin auth user: ${error?.message ?? "unknown error"}`);
+  }
+
+  await sql`update public.profiles set role = 'admin' where id = ${data.user.id}`;
+
+  logger.info(`Admin account created: ${email}`);
 }
 
 /* istanbul ignore next -- CLI entrypoint, exercised via the exported seedAdmin() in tests instead */

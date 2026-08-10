@@ -1,15 +1,15 @@
 jest.mock("../../src/services/upload.service", () => ({
-  uploadReportImages: jest.fn().mockResolvedValue([
-    "https://res.cloudinary.com/demo/image/upload/v1/ecoalert/reports/mock-1.jpg",
-    "https://res.cloudinary.com/demo/image/upload/v1/ecoalert/reports/mock-2.jpg"
-  ])
+  uploadReportImages: jest.fn().mockResolvedValue(["mock-owner/mock-1.jpg", "mock-owner/mock-2.jpg"]),
+  signReportImageUrls: jest.fn((paths: string[]) =>
+    Promise.resolve(paths.map((p) => `https://example.supabase.co/storage/v1/object/sign/reports/${p}?token=mock`))
+  )
 }));
 
 import * as reportService from "../../src/services/report.service";
 import { uploadReportImages } from "../../src/services/upload.service";
 import { createTestUser } from "../helpers";
 
-describe("report image upload (mocked Cloudinary)", () => {
+describe("report image upload (mocked Supabase Storage)", () => {
   it("stores the URLs returned by the upload service on the report", async () => {
     const citizen = await createTestUser({ role: "citizen" });
 
@@ -28,8 +28,8 @@ describe("report image upload (mocked Cloudinary)", () => {
       files: [fakeFile, fakeFile]
     });
 
-    expect(uploadReportImages).toHaveBeenCalledWith([fakeFile, fakeFile]);
+    expect(uploadReportImages).toHaveBeenCalledWith([fakeFile, fakeFile], citizen.id);
     expect(report.images).toHaveLength(2);
-    expect(report.images[0]).toContain("res.cloudinary.com");
+    expect(report.images[0]).toContain("example.supabase.co/storage");
   });
 });

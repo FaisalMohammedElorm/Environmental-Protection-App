@@ -1,44 +1,35 @@
-import { User } from "../models/User";
+import { sql } from "../config/db";
 import { ApiError } from "../utils/ApiError";
-import { serializeUser, type PublicUser } from "../utils/serializers/user.serializer";
+import { serializeUser, type PublicUser, type ProfileRow } from "../utils/serializers/user.serializer";
 import { uploadImageBuffer } from "./upload.service";
 
 interface UpdateProfileInput {
   name?: string;
-  email?: string;
   phone?: string;
 }
 
-export async function updateProfile(userId: string, updates: UpdateProfileInput): Promise<PublicUser> {
-  if (updates.email) {
-    const existing = await User.findOne({ email: updates.email, _id: { $ne: userId } });
-    if (existing) throw ApiError.conflict("That email is already in use");
-  }
+const profileColumns = () => sql`id, name, email, role, phone, avatar_url, is_active, created_at`;
 
-  const user = await User.findByIdAndUpdate(userId, updates, { new: true, runValidators: true });
-  if (!user) throw ApiError.notFound("User not found");
-  return serializeUser(user);
+export async function updateProfile(userId: string, updates: UpdateProfileInput): Promise<PublicUser> {
+  const [row] = await sql<ProfileRow[]>`
+    update public.profiles
+    set
+      name = coalesce(${updates.name ?? null}::text, name),
+      phone = coalesce(${updates.phone ?? null}::text, phone)
+    where id = ${userId}
+    returning ${profileColumns()}
+  `;
+  if (!row) throw ApiError.notFound("User not found");
+  return serializeUser(row);
 }
 
 export async function updateAvatar(userId: string, file: Express.Multer.File): Promise<PublicUser> {
-  const avatarUrl = await uploadImageBuffer(file.buffer, "ecoalert/avatars");
+  const avatarUrl = await uploadImageBuffer(file, "avatars", userId);
 
-  const user = await User.findByIdAndUpdate(userId, { avatarUrl }, { new: true });
-  if (!user) throw ApiError.notFound("User not found");
-  return serializeUser(user);
-}
-
-export async function changePassword(
-  userId: string,
-  currentPassword: string,
-  newPassword: string
-): Promise<void> {
-  const user = await User.findById(userId).select("+password");
-  if (!user) throw ApiError.notFound("User not found");
-
-  const isValid = await user.comparePassword(currentPassword);
-  if (!isValid) throw ApiError.unauthorized("Current password is incorrect");
-
-  user.password = newPassword;
-  await user.save();
+  const [row] = await sql<ProfileRow[]>`
+    update public.profiles set avatar_url = ${avatarUrl} where id = ${userId}
+    returning ${profileColumns()}
+  `;
+  if (!row) throw ApiError.notFound("User not found");
+  return serializeUser(row);
 }

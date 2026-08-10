@@ -9,13 +9,15 @@ The citizen-facing web app for EcoAlert, an environmental issue reporting platfo
 - **Framer Motion** for entrance/scroll animation
 - **React Hook Form + Zod** for form state and validation
 - **TanStack React Query + Axios** for data fetching against the backend API
+- **Supabase** (`@supabase/ssr`, `@supabase/supabase-js`) for auth — signup/login/logout/session
+  go directly to Supabase, not through the backend
 - **lucide-react** for icons, **react-hot-toast** for notifications, **next-themes** for dark mode
 
 ## Getting started
 
 ```bash
 npm install
-cp .env.example .env.local   # then fill in NEXT_PUBLIC_API_URL etc.
+cp .env.example .env.local   # fill in NEXT_PUBLIC_API_URL, NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
 npm run dev
 ```
 
@@ -38,10 +40,13 @@ The app runs at `http://localhost:3000`.
 ```
 src/
   app/                 # App Router routes and layouts
+  middleware.ts         # Server-side auth/role guard for /dashboard, /admin, /officer
   components/
     landing/           # Landing-page sections (Hero, Features, etc.)
     ui/                 # Shared, reusable primitives
-  lib/                  # Mock data, API client, utilities
+  lib/
+    supabase/            # Browser + Server Component Supabase clients
+    api/                  # Axios wrappers to the backend (api/auth.ts wraps supabase-js instead)
 public/
   textures/             # SVG background textures (contour map motif)
 ```
@@ -56,9 +61,9 @@ Defined in `tailwind.config.ts` and `src/app/globals.css`:
 
 ## Status
 
-Frontend is feature-complete against the original spec: landing page, all auth flows, citizen/officer/admin dashboards, all static pages, interactive map location picking (Leaflet/OSM), dark mode, and Docker/Vercel deployment config.
-
-Next milestone: the Express + MongoDB backend this app is designed to talk to.
+Feature-complete against the original spec: landing page, all auth flows (via Supabase Auth),
+citizen/officer/admin dashboards, all static pages, interactive map location picking
+(Leaflet/OSM), dark mode, and Docker/Vercel deployment config.
 
 ## Docker
 

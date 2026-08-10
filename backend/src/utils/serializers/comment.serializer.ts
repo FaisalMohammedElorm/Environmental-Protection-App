@@ -1,5 +1,11 @@
-import type { IComment } from "../../models/Comment";
-import type { IUser } from "../../models/User";
+export interface CommentRow {
+  id: string;
+  author_id: string;
+  author_name: string;
+  author_role: string;
+  body: string;
+  created_at: Date;
+}
 
 export interface PublicComment {
   id: string;
@@ -9,14 +15,12 @@ export interface PublicComment {
   createdAt: string;
 }
 
-type PopulatedComment = IComment & { author: IUser };
-
-export function serializeComment(comment: PopulatedComment): PublicComment {
+export function serializeComment(row: CommentRow): PublicComment {
   return {
-    id: comment.id,
-    authorName: comment.author.name,
-    authorRole: comment.authorRole,
-    body: comment.body,
-    createdAt: comment.createdAt.toISOString()
+    id: row.id,
+    authorName: row.author_name,
+    authorRole: row.author_role,
+    body: row.body,
+    createdAt: row.created_at.toISOString()
   };
 }

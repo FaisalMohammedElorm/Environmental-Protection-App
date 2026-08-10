@@ -8,10 +8,13 @@ import toast from "react-hot-toast";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { changePassword } from "@/lib/api/users";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { supabase } from "@/lib/supabase/client";
 import { changePasswordSchema, type ChangePasswordFormValues } from "@/lib/validators/profile";
 
 export default function SettingsPage() {
+  const { data: user } = useCurrentUser();
+
   const {
     register,
     handleSubmit,
@@ -22,8 +25,22 @@ export default function SettingsPage() {
   });
 
   const mutation = useMutation({
-    mutationFn: (values: ChangePasswordFormValues) =>
-      changePassword({ currentPassword: values.currentPassword, newPassword: values.newPassword }),
+    mutationFn: async (values: ChangePasswordFormValues) => {
+      if (!user?.email) throw new Error("Not signed in");
+
+      // Supabase's updateUser() doesn't require the current password (the
+      // active session already proves identity) — re-authenticate first so
+      // "change password" still requires knowing the current one, same as
+      // the old Express-backed flow did.
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: values.currentPassword
+      });
+      if (reauthError) throw reauthError;
+
+      const { error } = await supabase.auth.updateUser({ password: values.newPassword });
+      if (error) throw error;
+    },
     onSuccess: () => {
       toast.success("Password updated");
       reset();

@@ -24,7 +24,7 @@ export const updateUserRoleSchema = z.object({
 });
 
 export const userIdParamSchema = z.object({
-  id: z.string().regex(/^[a-f\d]{24}$/i, "id must be a valid user ID")
+  id: z.string().uuid("id must be a valid user ID")
 });
 
 export const updateSettingsSchema = z.object({

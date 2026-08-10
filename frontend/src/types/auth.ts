@@ -10,11 +10,6 @@ export interface AuthUser {
   createdAt: string;
 }
 
-export interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-}
-
 export interface LoginPayload {
   email: string;
   password: string;
@@ -32,7 +27,6 @@ export interface ForgotPasswordPayload {
 }
 
 export interface ResetPasswordPayload {
-  token: string;
   password: string;
 }
 

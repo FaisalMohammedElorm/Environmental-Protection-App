@@ -1,6 +1,6 @@
 jest.mock("../../src/services/upload.service", () => ({
   ...jest.requireActual("../../src/services/upload.service"),
-  uploadImageBuffer: jest.fn().mockResolvedValue("https://res.cloudinary.com/demo/image/upload/v1/ecoalert/avatars/mock.jpg")
+  uploadImageBuffer: jest.fn().mockResolvedValue("https://example.supabase.co/storage/v1/object/public/avatars/mock.jpg")
 }));
 
 import request from "supertest";
@@ -43,6 +43,6 @@ describe("Avatar upload API", () => {
       .attach("avatar", jpegBytes, { filename: "photo.jpg", contentType: "image/jpeg" });
 
     expect(res.status).toBe(200);
-    expect(res.body.avatarUrl).toContain("res.cloudinary.com");
+    expect(res.body.avatarUrl).toContain("supabase.co/storage");
   });
 });

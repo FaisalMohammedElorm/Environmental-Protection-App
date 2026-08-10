@@ -31,14 +31,18 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user) {
-      reset({ name: user.name, email: user.email, phone: "" });
+      reset({ name: user.name, phone: "" });
     }
   }, [user, reset]);
 
+  // Profile writes go through Express, but identity is now sourced from
+  // Supabase (see use-current-user.ts) — Express's response shape no longer
+  // matches the cached AuthUser exactly, so refetch through that path
+  // instead of splicing the raw response into the cache.
   const mutation = useMutation({
     mutationFn: updateProfile,
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["auth", "me"], updated);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
       toast.success("Profile updated");
     },
     onError: () => toast.error("Couldn't update your profile")
@@ -46,8 +50,8 @@ export default function ProfilePage() {
 
   const avatarMutation = useMutation({
     mutationFn: uploadAvatar,
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["auth", "me"], updated);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
       toast.success("Photo updated");
     },
     onError: () => toast.error("Couldn't upload that photo"),
@@ -117,7 +121,7 @@ export default function ProfilePage() {
 
       <form className="card flex flex-col gap-5 p-8" onSubmit={handleSubmit((values) => mutation.mutate(values))}>
         <Input label="Full name" error={errors.name?.message} {...register("name")} />
-        <Input label="Email" type="email" error={errors.email?.message} {...register("email")} />
+        <Input label="Email" type="email" value={user?.email ?? ""} disabled hint="Contact support to change your email" />
         <Input label="Phone (optional)" type="tel" error={errors.phone?.message} {...register("phone")} />
 
         <Button type="submit" isLoading={mutation.isPending} disabled={!isDirty}>

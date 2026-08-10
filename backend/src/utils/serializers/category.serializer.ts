@@ -1,4 +1,11 @@
-import type { ICategory } from "../../models/Category";
+export interface CategoryRow {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  is_active: boolean;
+  report_count?: number | string | null;
+}
 
 export interface PublicCategory {
   id: string;
@@ -9,13 +16,13 @@ export interface PublicCategory {
   reportCount: number;
 }
 
-export function serializeCategory(category: ICategory, reportCount = 0): PublicCategory {
+export function serializeCategory(row: CategoryRow): PublicCategory {
   return {
-    id: category.id,
-    name: category.name,
-    slug: category.slug,
-    description: category.description,
-    isActive: category.isActive,
-    reportCount
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description ?? undefined,
+    isActive: row.is_active,
+    reportCount: Number(row.report_count ?? 0)
   };
 }

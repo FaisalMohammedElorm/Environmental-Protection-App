@@ -7,29 +7,29 @@ import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 import { AuthLayout } from "@/components/ui/auth-layout";
-import { verifyEmail } from "@/lib/api/auth";
+import { exchangeCodeForSession } from "@/lib/api/auth";
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
-  const token = searchParams.get("token") ?? "";
+  const code = searchParams.get("code") ?? "";
   const hasRun = useRef(false);
-  const [status, setStatus] = useState<"pending" | "success" | "error">(token ? "pending" : "error");
+  const [status, setStatus] = useState<"pending" | "success" | "error">(code ? "pending" : "error");
 
   const mutation = useMutation({
-    mutationFn: verifyEmail,
+    mutationFn: exchangeCodeForSession,
     onSuccess: () => setStatus("success"),
     onError: () => setStatus("error")
   });
 
   useEffect(() => {
-    if (token && !hasRun.current) {
+    if (code && !hasRun.current) {
       hasRun.current = true;
-      mutation.mutate(token);
+      mutation.mutate(code);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [code]);
 
-  if (!token) {
+  if (!code) {
     return (
       <AuthLayout eyebrow="Email verification" title="Link missing its token">
         <div className="rounded-2xl border border-canopy-100 dark:border-canopy-700 bg-mist/60 dark:bg-canopy-800/60 p-6">

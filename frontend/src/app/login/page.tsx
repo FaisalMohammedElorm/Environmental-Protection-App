@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
+import { isAuthApiError } from "@supabase/supabase-js";
 import toast from "react-hot-toast";
 
 import { AuthLayout } from "@/components/ui/auth-layout";
@@ -32,8 +33,14 @@ export default function LoginPage() {
       else if (data.role === "officer") router.push("/officer");
       else router.push("/dashboard");
     },
-    onError: () => {
-      toast.error("Incorrect email or password");
+    onError: (error) => {
+      if (isAuthApiError(error) && error.code === "email_not_confirmed") {
+        toast.error("Please confirm your email before logging in — check your inbox for the link.");
+      } else if (isAuthApiError(error)) {
+        toast.error("Incorrect email or password");
+      } else {
+        toast.error("Network error — check your connection and try again");
+      }
     }
   });
 

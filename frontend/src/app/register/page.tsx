@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
+import { isAuthApiError } from "@supabase/supabase-js";
 import { MailCheck } from "lucide-react";
 
 import { AuthLayout } from "@/components/ui/auth-layout";
@@ -13,6 +14,19 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { register as registerUser } from "@/lib/api/auth";
 import { registerSchema, type RegisterFormValues } from "@/lib/validators/auth";
+
+function registerErrorMessage(error: unknown): string {
+  if (isAuthApiError(error)) {
+    if (error.code === "user_already_exists" || error.code === "email_exists") {
+      return "That email is already registered — log in instead.";
+    }
+    if (error.code === "over_email_send_rate_limit" || error.code === "over_request_rate_limit") {
+      return "Too many attempts — wait a moment and try again.";
+    }
+    return error.message;
+  }
+  return "Network error — check your connection and try again.";
+}
 
 export default function RegisterPage() {
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
@@ -29,9 +43,6 @@ export default function RegisterPage() {
     mutationFn: registerUser,
     onSuccess: (_data, variables) => {
       setSubmittedEmail(variables.email);
-    },
-    onError: () => {
-      // no-op — the form below surfaces its own toast via the button state
     }
   });
 
@@ -130,7 +141,7 @@ export default function RegisterPage() {
         />
 
         {mutation.isError ? (
-          <p className="text-sm text-alert-clay">Could not create your account. That email may already be registered.</p>
+          <p className="text-sm text-alert-clay">{registerErrorMessage(mutation.error)}</p>
         ) : null}
 
         <Button type="submit" fullWidth isLoading={mutation.isPending}>

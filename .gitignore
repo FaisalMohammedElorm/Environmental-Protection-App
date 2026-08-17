@@ -7,13 +7,6 @@ frontend/out
 frontend/*.tsbuildinfo
 frontend/next-env.d.ts
 
-# Backend build output
-backend/dist
-backend/dist-test
-backend/logs
-backend/uploads/*
-!backend/uploads/.gitkeep
-
 # Env files (never commit real secrets)
 .env
 .env.local
@@ -37,6 +30,3 @@ yarn-error.log*
 .vscode/*
 !.vscode/extensions.json
 .idea
-
-# Docker
-docker-compose.override.yml

@@ -8,16 +8,20 @@ The citizen-facing web app for EcoAlert, an environmental issue reporting platfo
 - **Tailwind CSS** with a custom EcoAlert design-token theme (`tailwind.config.ts`)
 - **Framer Motion** for entrance/scroll animation
 - **React Hook Form + Zod** for form state and validation
-- **TanStack React Query + Axios** for data fetching against the backend API
-- **Supabase** (`@supabase/ssr`, `@supabase/supabase-js`) for auth — signup/login/logout/session
-  go directly to Supabase, not through the backend
+- **TanStack React Query** for data fetching/caching, backed directly by Supabase (no REST API in
+  between)
+- **Supabase** (`@supabase/ssr`, `@supabase/supabase-js`) for everything — auth, database (via
+  RLS-protected PostgREST queries and a couple of `SECURITY DEFINER` RPCs), and Storage
+- Two **Server Actions** (`src/app/actions/`) for the only two things that genuinely need a
+  server-side secret: report-image upload (service-role key + magic-byte validation) and the
+  contact form (SMTP credentials)
 - **lucide-react** for icons, **react-hot-toast** for notifications, **next-themes** for dark mode
 
 ## Getting started
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in NEXT_PUBLIC_API_URL, NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
+cp .env.example .env.local   # fill in NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 npm run dev
 ```
 
@@ -63,12 +67,4 @@ Defined in `tailwind.config.ts` and `src/app/globals.css`:
 
 Feature-complete against the original spec: landing page, all auth flows (via Supabase Auth),
 citizen/officer/admin dashboards, all static pages, interactive map location picking
-(Leaflet/OSM), dark mode, and Docker/Vercel deployment config.
-
-## Docker
-
-```bash
-docker compose up --build
-```
-
-Serves the production build at `http://localhost:3000`. Set `NEXT_PUBLIC_API_URL` etc. via a `.env` file or exported environment variables — see `.env.example`.
+(Leaflet/OSM), dark mode, and Vercel deployment config (`vercel.json`, Root Directory = `frontend`).

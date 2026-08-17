@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, CheckCheck } from "lucide-react";
 
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/api/notifications";
+import { supabase } from "@/lib/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -15,6 +17,31 @@ export default function NotificationsPage() {
     queryKey: ["notifications", { page: 1 }],
     queryFn: () => getNotifications(1)
   });
+
+  // Live updates: a new notification (report status change, assignment, or
+  // comment) refetches the list immediately instead of waiting for the next
+  // navigation/refocus. RLS still scopes this to the signed-in user's own
+  // rows — the channel just tells us when to refetch, it doesn't itself
+  // bypass any access control.
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | undefined;
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      channel = supabase
+        .channel(`notifications:${user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+          () => queryClient.invalidateQueries({ queryKey: ["notifications"] })
+        )
+        .subscribe();
+    });
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const markRead = useMutation({
     mutationFn: markNotificationRead,

@@ -1,194 +1,249 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { Inbox, Check, X, ArrowUpRight, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  ClipboardList,
+  Hourglass,
+  Inbox,
+  Loader,
+  X
+} from "lucide-react";
 
-import { getReports, updateReportStatus } from "@/lib/api/reports";
-import { formatCategoryLabel, statusLabels, type ReportStatus } from "@/types/report";
-import { StatusBadge, SeverityBadge } from "@/components/dashboard/badges";
+import { getReportStats, getReports, updateReportStatus } from "@/lib/api/reports";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { StatCard } from "@/components/dashboard/stat-card";
+import {
+  ReportFilters,
+  defaultReportFilters,
+  toReportListParams,
+  type ReportFilterValues
+} from "@/components/reports/report-filters";
+import { Pagination, ReportTable } from "@/components/reports/report-table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 
-const statusFilters: Array<{ value: ReportStatus | "all"; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "new", label: statusLabels.new },
-  { value: "under_review", label: statusLabels.under_review },
-  { value: "assigned", label: statusLabels.assigned },
-  { value: "in_progress", label: statusLabels.in_progress },
-  { value: "resolved", label: statusLabels.resolved },
-  { value: "rejected", label: statusLabels.rejected }
-];
+type View = "mine" | "queue";
 
-const sortOptions: Array<{ value: string; sortBy: "createdAt" | "severity"; sortOrder: "asc" | "desc"; label: string }> = [
-  { value: "newest", sortBy: "createdAt", sortOrder: "desc", label: "Newest first" },
-  { value: "oldest", sortBy: "createdAt", sortOrder: "asc", label: "Oldest first" },
-  { value: "severity-desc", sortBy: "severity", sortOrder: "desc", label: "Most severe first" },
-  { value: "severity-asc", sortBy: "severity", sortOrder: "asc", label: "Least severe first" }
-];
+const PAGE_SIZE = 20;
 
-export default function OfficerQueuePage() {
-  const [status, setStatus] = useState<ReportStatus | "all">("new");
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState(sortOptions[0]!);
-  const [page, setPage] = useState(1);
+export default function OfficerDashboardPage() {
+  const { data: user } = useCurrentUser();
   const queryClient = useQueryClient();
+  const [view, setView] = useState<View>("mine");
+  const [filters, setFilters] = useState<Record<View, ReportFilterValues>>({
+    mine: defaultReportFilters,
+    // The triage queue has always opened on newly submitted reports.
+    queue: { ...defaultReportFilters, status: "new" }
+  });
+  const [pages, setPages] = useState<Record<View, number>>({ mine: 1, queue: 1 });
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["reports", "all", { status, search, sort: sort.value, page }],
-    queryFn: () =>
-      getReports({
-        status: status === "all" ? undefined : status,
-        search: search || undefined,
-        sortBy: sort.sortBy,
-        sortOrder: sort.sortOrder,
-        page,
-        limit: 20
-      })
+  const activeFilters = filters[view];
+  const page = pages[view];
+
+  const stats = useQuery({
+    queryKey: ["report-stats", { assignedTo: user?.id }],
+    queryFn: () => getReportStats({ assignedTo: user!.id }),
+    enabled: Boolean(user?.id)
+  });
+
+  const listParams = {
+    ...toReportListParams(activeFilters),
+    ...(view === "mine" ? { assignedTo: user?.id } : {}),
+    page,
+    limit: PAGE_SIZE
+  };
+
+  const reportsQuery = useQuery({
+    queryKey: ["reports", "staff", view, listParams],
+    queryFn: () => getReports(listParams),
+    enabled: view === "queue" || Boolean(user?.id)
   });
 
   const statusMutation = useMutation({
     mutationFn: ({ id, next }: { id: string; next: string }) => updateReportStatus(id, next),
     onSuccess: () => {
       toast.success("Report updated");
-      queryClient.invalidateQueries({ queryKey: ["reports", "all"] });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      queryClient.invalidateQueries({ queryKey: ["report-stats"] });
     },
     onError: () => toast.error("Couldn't update that report")
   });
 
-  const reports = data?.items ?? [];
+  const s = stats.data;
+  const openAssigned = s ? s.total - s.byStatus.resolved - s.byStatus.rejected : undefined;
+  const reports = reportsQuery.data?.items ?? [];
+  const firstName = user?.name?.split(" ")[0];
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap gap-2">
-          {statusFilters.map((filter) => (
+    <div className="flex flex-col gap-8">
+      <header>
+        <span className="eyebrow mb-1 block">
+          {firstName ? `Welcome back, ${firstName}` : "Environmental operations"}
+        </span>
+        <h2 className="font-display text-2xl font-semibold text-canopy-800 dark:text-canopy-100 sm:text-3xl">
+          Environmental Officer Dashboard
+        </h2>
+        <p className="mt-1 max-w-2xl text-sm text-canopy-500 dark:text-canopy-400">
+          Monitor, review and respond to environmental reports assigned to you.
+        </p>
+      </header>
+
+      {stats.isError ? (
+        <ErrorState title="Couldn't load your statistics" onRetry={() => stats.refetch()} />
+      ) : (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <StatCard
+            label="Open assignments"
+            value={openAssigned}
+            icon={ClipboardList}
+            isLoading={stats.isPending}
+            hint="Assigned to you, not closed"
+          />
+          <StatCard
+            label="Not started"
+            value={s ? s.byStatus.assigned + s.byStatus.under_review : undefined}
+            icon={Hourglass}
+            tone="warning"
+            isLoading={stats.isPending}
+            hint="Assigned or under review"
+          />
+          <StatCard
+            label="In progress"
+            value={s?.byStatus.in_progress}
+            icon={Loader}
+            isLoading={stats.isPending}
+          />
+          <StatCard
+            label="Resolved"
+            value={s?.byStatus.resolved}
+            icon={CheckCircle2}
+            tone="success"
+            isLoading={stats.isPending}
+          />
+          <StatCard
+            label="Urgent"
+            value={s?.urgentOpen}
+            icon={AlertTriangle}
+            tone="danger"
+            isLoading={stats.isPending}
+            hint="High or critical, still open"
+          />
+        </div>
+      )}
+
+      <section className="flex flex-col gap-4">
+        <div
+          role="tablist"
+          aria-label="Report views"
+          className="flex w-fit gap-1 rounded-full border border-canopy-100 bg-paper p-1 dark:border-canopy-700 dark:bg-canopy-800"
+        >
+          {(
+            [
+              { value: "mine", label: "Assigned to me" },
+              { value: "queue", label: "Triage queue" }
+            ] as const
+          ).map((tab) => (
             <button
-              key={filter.value}
-              onClick={() => {
-                setStatus(filter.value);
-                setPage(1);
-              }}
-              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-                status === filter.value
+              key={tab.value}
+              role="tab"
+              aria-selected={view === tab.value}
+              onClick={() => setView(tab.value)}
+              className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                view === tab.value
                   ? "bg-canopy-700 text-paper"
-                  : "border border-canopy-100 dark:border-canopy-700 text-canopy-600 dark:text-canopy-300 hover:border-canopy-700"
+                  : "text-canopy-600 hover:text-canopy-800 dark:text-canopy-300 dark:hover:text-canopy-100"
               }`}
             >
-              {filter.label}
+              {tab.label}
             </button>
           ))}
         </div>
 
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-canopy-300 dark:text-canopy-600" />
-          <input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search description or location"
-            className="w-64 rounded-xl border border-canopy-100 dark:border-canopy-700 bg-paper dark:bg-canopy-800 py-2 pl-9 pr-3 text-sm text-canopy-800 dark:text-canopy-100 outline-none focus:border-moss focus:ring-2 focus:ring-moss/20"
-          />
-        </div>
+        <p className="text-sm text-canopy-500 dark:text-canopy-400">
+          {view === "mine"
+            ? "Reports an administrator assigned to you, or that you took on from the triage queue."
+            : "Every report in the system. Accept new submissions for review, or open one to assign it to yourself."}
+        </p>
 
-        <select
-          value={sort.value}
-          onChange={(e) => {
-            const next = sortOptions.find((o) => o.value === e.target.value);
-            if (next) setSort(next);
-            setPage(1);
+        <ReportFilters
+          key={view}
+          value={activeFilters}
+          onChange={(next) => {
+            setFilters((prev) => ({ ...prev, [view]: next }));
+            setPages((prev) => ({ ...prev, [view]: 1 }));
           }}
-          className="rounded-xl border border-canopy-100 dark:border-canopy-700 bg-paper dark:bg-canopy-800 py-2 px-3 text-sm text-canopy-800 dark:text-canopy-100 outline-none focus:border-moss focus:ring-2 focus:ring-moss/20"
-        >
-          {sortOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+        />
 
-      {isLoading && (
-        <div className="space-y-3">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-16 w-full" />
-        </div>
-      )}
+        {reportsQuery.isPending && (
+          <div className="space-y-3">
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
+          </div>
+        )}
 
-      {!isLoading && (isError || reports.length === 0) && (
-        <EmptyState icon={Inbox} title="Queue is empty" description="No reports match this filter right now." />
-      )}
+        {reportsQuery.isError && (
+          <ErrorState title="Couldn't load reports" onRetry={() => reportsQuery.refetch()} />
+        )}
 
-      {!isLoading && reports.length > 0 && (
-        <>
-          <div className="card divide-y divide-canopy-100 dark:divide-canopy-700">
-            {reports.map((report) => (
-              <div key={report.id} className="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
-                <Link href={`/officer/reports/${report.id}`} className="min-w-[200px] flex-1 hover:underline">
-                  <p className="font-medium text-canopy-800 dark:text-canopy-100">{formatCategoryLabel(report.category)}</p>
-                  <p className="text-xs text-canopy-400 dark:text-canopy-500">
-                    {report.location.address} · by {report.reportedBy.name}
-                  </p>
-                </Link>
+        {!reportsQuery.isPending && !reportsQuery.isError && reports.length === 0 && (
+          <EmptyState
+            icon={Inbox}
+            title={view === "mine" ? "Nothing assigned to you" : "Queue is empty"}
+            description={
+              view === "mine"
+                ? JSON.stringify(activeFilters) === JSON.stringify(defaultReportFilters)
+                  ? "No environmental reports are currently assigned to you. Check the triage queue for new submissions."
+                  : "None of your assigned reports match these filters."
+                : "No reports match these filters right now."
+            }
+          />
+        )}
 
-                <div className="flex items-center gap-2">
-                  <SeverityBadge severity={report.severity} />
-                  <StatusBadge status={report.status} />
-                </div>
-
-                {report.status === "new" && (
-                  <div className="flex gap-2">
+        {!reportsQuery.isPending && !reportsQuery.isError && reports.length > 0 && (
+          <>
+            <ReportTable
+              reports={reports}
+              detailHref={(id) => `/officer/reports/${id}`}
+              showAssignee={view === "queue"}
+              renderActions={(report) =>
+                view === "queue" && report.status === "new" ? (
+                  <>
                     <Button
                       variant="secondary"
+                      className="px-3 py-1.5 text-xs"
+                      disabled={statusMutation.isPending}
                       onClick={() => statusMutation.mutate({ id: report.id, next: "under_review" })}
                     >
-                      <Check className="h-4 w-4" /> Accept
+                      <Check className="h-3.5 w-3.5" /> Accept
                     </Button>
                     <Button
                       variant="ghost"
+                      className="px-3 py-1.5 text-xs"
+                      disabled={statusMutation.isPending}
                       onClick={() => statusMutation.mutate({ id: report.id, next: "rejected" })}
                     >
-                      <X className="h-4 w-4" /> Reject
+                      <X className="h-3.5 w-3.5" /> Reject
                     </Button>
-                  </div>
-                )}
-
-                <Link href={`/officer/reports/${report.id}`} className="text-canopy-300 dark:text-canopy-600 hover:text-canopy-600 dark:hover:text-canopy-300">
-                  <ArrowUpRight className="h-4 w-4" />
-                </Link>
-              </div>
-            ))}
-          </div>
-
-          {data && data.totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="inline-flex items-center gap-1 text-sm font-medium text-canopy-600 dark:text-canopy-300 disabled:opacity-40"
-              >
-                <ChevronLeft className="h-4 w-4" /> Previous
-              </button>
-              <span className="text-xs text-canopy-400 dark:text-canopy-500">
-                Page {data.page} of {data.totalPages}
-              </span>
-              <button
-                disabled={page >= data.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="inline-flex items-center gap-1 text-sm font-medium text-canopy-600 dark:text-canopy-300 disabled:opacity-40"
-              >
-                Next <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-        </>
-      )}
+                  </>
+                ) : null
+              }
+            />
+            <Pagination
+              page={page}
+              totalPages={reportsQuery.data?.totalPages ?? 1}
+              onPageChange={(next) => setPages((prev) => ({ ...prev, [view]: next }))}
+            />
+          </>
+        )}
+      </section>
     </div>
   );
 }

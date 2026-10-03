@@ -9,7 +9,7 @@ import type {
   ReportStatus
 } from "@/types/report";
 
-// Disambiguated via the FK column name — reports has two FKs to profiles
+// Disambiguated via the FK column name â€” reports has two FKs to profiles
 // (reported_by, assigned_to), so PostgREST needs the hint to know which one
 // each embed refers to.
 const REPORT_SELECT =
@@ -90,6 +90,12 @@ async function fetchReportsList(params: ReportListParams, ownerId?: string): Pro
   if (params.severity) query = query.eq("severity", params.severity);
   if (params.category) query = query.eq("category_id", await resolveCategoryId(params.category));
   if (params.search) query = query.textSearch("search", params.search, { type: "plain" });
+  if (params.assignedTo === "unassigned") query = query.is("assigned_to", null);
+  else if (params.assignedTo) query = query.eq("assigned_to", params.assignedTo);
+  // Date inputs are local calendar days â€” converted to the matching UTC
+  // instants so "from 3 Oct" means midnight in the viewer's own timezone.
+  if (params.createdFrom) query = query.gte("created_at", new Date(`${params.createdFrom}T00:00:00`).toISOString());
+  if (params.createdTo) query = query.lte("created_at", new Date(`${params.createdTo}T23:59:59.999`).toISOString());
 
   query = query.order(sortColumn(params.sortBy), { ascending: (params.sortOrder ?? "desc") === "asc" }).range(from, to);
 
@@ -186,6 +192,66 @@ export async function assignReport(id: string, officerId: string): Promise<Repor
   const { error } = await supabase.from("reports").update({ assigned_to: officer.id, status: nextStatus }).eq("id", id);
   if (error) throw error;
   return getReportById(id);
+}
+
+export interface ReportStats {
+  total: number;
+  byStatus: Record<ReportStatus, number>;
+  /** High/critical severity reports that are still open (not resolved or rejected). */
+  urgentOpen: number;
+  /** Open reports with no officer assigned (always 0 when scoped to one officer). */
+  unassignedOpen: number;
+}
+
+const ALL_STATUSES: ReportStatus[] = ["new", "under_review", "assigned", "in_progress", "resolved", "rejected"];
+
+// Head-only count queries (no rows transferred) â€” RLS still applies, so a
+// staff caller counts every report and the scope narrows it to one officer.
+export async function getReportStats(scope: { assignedTo?: string } = {}): Promise<ReportStats> {
+  const base = () => {
+    let query = supabase.from("reports").select("id", { count: "exact", head: true });
+    if (scope.assignedTo) query = query.eq("assigned_to", scope.assignedTo);
+    return query;
+  };
+
+  const [totalResult, urgentResult, unassignedResult, ...statusResults] = await Promise.all([
+    base(),
+    base().in("severity", ["high", "critical"]).not("status", "in", "(resolved,rejected)"),
+    base().is("assigned_to", null).not("status", "in", "(resolved,rejected)"),
+    ...ALL_STATUSES.map((status) => base().eq("status", status))
+  ]);
+
+  const firstError = [totalResult, urgentResult, unassignedResult, ...statusResults].find((r) => r.error)?.error;
+  if (firstError) throw firstError;
+
+  const byStatus = Object.fromEntries(
+    ALL_STATUSES.map((status, i) => [status, statusResults[i]?.count ?? 0])
+  ) as Record<ReportStatus, number>;
+
+  return {
+    total: totalResult.count ?? 0,
+    byStatus,
+    urgentOpen: urgentResult.count ?? 0,
+    unassignedOpen: unassignedResult.count ?? 0
+  };
+}
+
+/** Open (not resolved/rejected) reports currently assigned to each officer. */
+export async function getOpenAssignmentCounts(officerIds: string[]): Promise<Record<string, number>> {
+  const results = await Promise.all(
+    officerIds.map((id) =>
+      supabase
+        .from("reports")
+        .select("id", { count: "exact", head: true })
+        .eq("assigned_to", id)
+        .not("status", "in", "(resolved,rejected)")
+    )
+  );
+
+  const firstError = results.find((r) => r.error)?.error;
+  if (firstError) throw firstError;
+
+  return Object.fromEntries(officerIds.map((id, i) => [id, results[i]?.count ?? 0]));
 }
 
 export async function addComment(id: string, body: string): Promise<Report> {

@@ -58,6 +58,11 @@ export interface ReportListParams {
   page?: number;
   limit?: number;
   search?: string;
+  /** Officer profile id, or "unassigned" for reports with no officer yet. */
+  assignedTo?: string;
+  /** Inclusive local calendar dates, formatted YYYY-MM-DD. */
+  createdFrom?: string;
+  createdTo?: string;
   sortBy?: "createdAt" | "severity" | "status";
   sortOrder?: "asc" | "desc";
 }

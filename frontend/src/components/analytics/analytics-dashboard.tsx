@@ -17,7 +17,9 @@ import { getAnalyticsSummary } from "@/lib/api/analytics";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCategoryLabel } from "@/types/report";
 
-export function AnalyticsDashboard() {
+// showSummary=false hides the four headline cards for pages (e.g. the admin
+// overview) that already render their own, more detailed stat cards.
+export function AnalyticsDashboard({ showSummary = true }: { showSummary?: boolean } = {}) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["analytics", "summary"],
     queryFn: getAnalyticsSummary
@@ -43,6 +45,7 @@ export function AnalyticsDashboard() {
 
   return (
     <div className="flex flex-col gap-8">
+      {showSummary && (
       <div className="grid gap-4 sm:grid-cols-4">
         <div className="card p-6">
           <p className="eyebrow mb-2">Total reports</p>
@@ -61,6 +64,7 @@ export function AnalyticsDashboard() {
           <p className="font-display text-3xl font-semibold text-canopy-800 dark:text-canopy-100">{data.totalUsers}</p>
         </div>
       </div>
+      )}
 
       <div className="card p-6">
         <h3 className="mb-4 font-display text-lg font-semibold text-canopy-800 dark:text-canopy-100">Category distribution</h3>

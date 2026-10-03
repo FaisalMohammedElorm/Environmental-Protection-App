@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { BarChart3, Users, ShieldCheck, Tags, ScrollText, Settings } from "lucide-react";
+import { BarChart3, FileText, Users, ShieldCheck, Tags, ScrollText, Settings } from "lucide-react";
 import { DashboardSidebar, type SidebarLink } from "@/components/dashboard/sidebar";
 import { DashboardTopbar } from "@/components/dashboard/topbar";
 import { useCurrentUser } from "@/hooks/use-current-user";
 
 const links: SidebarLink[] = [
-  { href: "/admin", label: "Analytics", icon: BarChart3 },
+  { href: "/admin", label: "Overview", icon: BarChart3 },
+  { href: "/admin/reports", label: "Reports", icon: FileText },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/officers", label: "Officers", icon: ShieldCheck },
   { href: "/admin/categories", label: "Categories", icon: Tags },

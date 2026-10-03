@@ -49,7 +49,23 @@ export async function getUsers(params: AdminUserListParams): Promise<PaginatedRe
   return { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
 }
 
-const ADMIN_USER_SELECT = "id, name, email, role, is_active, created_at";
+export interface PeopleCounts {
+  activeOfficers: number;
+  citizens: number;
+}
+
+// Head-only counts — admins can read every profile via profiles_select_staff.
+export async function getPeopleCounts(): Promise<PeopleCounts> {
+  const [officers, citizens] = await Promise.all([
+    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "officer").eq("is_active", true),
+    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "citizen")
+  ]);
+  if (officers.error) throw officers.error;
+  if (citizens.error) throw citizens.error;
+  return { activeOfficers: officers.count ?? 0, citizens: citizens.count ?? 0 };
+}
+
+const ADMIN_USER_SELECT ="id, name, email, role, is_active, created_at";
 
 interface ProfileRow {
   id: string;

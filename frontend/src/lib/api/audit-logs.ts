@@ -29,7 +29,28 @@ export async function getAuditLogs(page = 1): Promise<PaginatedResponse<AuditLog
     .range(from, to);
   if (error) throw error;
 
-  const items: AuditLogEntry[] = ((data ?? []) as unknown as AuditLogRow[]).map((row) => ({
+  const items: AuditLogEntry[] = ((data ?? []) as unknown as AuditLogRow[]).map(serialize);
+
+  const total = count ?? 0;
+  return { items, total, page, limit: PAGE_SIZE, totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
+}
+
+// Status/assignment history for one report, written by the
+// audit_report_changes trigger. Admin-only via the same RLS policy.
+export async function getReportActivity(reportId: string): Promise<AuditLogEntry[]> {
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select("id, actor_name, actor_role, action, target_type, target_id, metadata, created_at")
+    .eq("target_type", "Report")
+    .eq("target_id", reportId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return ((data ?? []) as unknown as AuditLogRow[]).map(serialize);
+}
+
+function serialize(row: AuditLogRow): AuditLogEntry {
+  return {
     id: row.id,
     actorName: row.actor_name,
     actorRole: row.actor_role,
@@ -38,8 +59,5 @@ export async function getAuditLogs(page = 1): Promise<PaginatedResponse<AuditLog
     targetId: row.target_id,
     metadata: row.metadata ?? undefined,
     createdAt: row.created_at
-  }));
-
-  const total = count ?? 0;
-  return { items, total, page, limit: PAGE_SIZE, totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
+  };
 }

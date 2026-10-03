@@ -7,7 +7,7 @@ import { DashboardTopbar } from "@/components/dashboard/topbar";
 import { useCurrentUser } from "@/hooks/use-current-user";
 
 const links: SidebarLink[] = [
-  { href: "/officer", label: "Report queue", icon: LayoutDashboard },
+  { href: "/officer", label: "Dashboard", icon: LayoutDashboard },
   { href: "/officer/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/profile", label: "Profile", icon: UserCircle },
   { href: "/dashboard/settings", label: "Settings", icon: Settings }
@@ -27,7 +27,7 @@ export default function OfficerLayout({ children }: { children: React.ReactNode 
       />
       <div className="flex flex-1 flex-col">
         <DashboardTopbar
-          title="Report queue"
+          title="Officer dashboard"
           userName={user?.name ?? "Officer"}
           onMenuClick={() => setIsMobileNavOpen(true)}
         />
